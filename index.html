@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="WebP Forge — Fast, private, multi-core WebP converter running 100% in your browser via WebAssembly." />
+<title>WebP Forge — drop images, get WebP</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23c05f3c'/%3E%3Cpath d='M9 21l4.5-6 3.5 4.5 2.5-3L23 21H9z' fill='%23fffdf8'/%3E%3Ccircle cx='12.5' cy='11.5' r='2' fill='%23f6e7de'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f3eee2;
+    --card: #fffdf8;
+    --card-2: #faf5ea;
+    --line: #e4dccb;
+    --line-soft: #ede6d7;
+    --ink: #2c2823;
+    --ink-2: #6d6459;
+    --ink-3: #a2988a;
+    --accent: #c05f3c;
+    --accent-soft: #f6e7de;
+    --ok: #4b8a5f;
+    --warn: #b5822f;
+    --err: #b4483c;
+    --display: "Fraunces", Georgia, serif;
+    --body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --shadow: 0 1px 2px rgba(70,55,35,.05), 0 8px 24px -12px rgba(70,55,35,.14);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--body);
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: var(--accent); color: #fff; }
+
+  .app { max-width: 800px; margin: 0 auto; padding: 44px 24px 80px; }
+
+  header { text-align: center; margin-bottom: 28px; }
+  h1 {
+    font-family: var(--display);
+    font-size: 34px; font-weight: 600; margin: 0 0 6px;
+    letter-spacing: -0.02em; font-variation-settings: "opsz" 96;
+  }
+  h1 em { font-style: italic; font-weight: 500; color: var(--accent); }
+  header p { margin: 0; color: var(--ink-2); font-size: 15px; }
+
+  /* ── drop ─────────────────────────────────────────── */
+  .drop {
+    position: relative;
+    background: var(--card);
+    border: 1.5px dashed var(--line);
+    border-radius: 16px;
+    padding: 42px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    box-shadow: var(--shadow);
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  .drop svg { width: 26px; height: 26px; color: var(--ink-3); margin-bottom: 10px; }
+  .drop:hover svg, .drop.over svg { color: var(--accent); }
+  .drop b { display: block; font-size: 17px; font-weight: 600; margin-bottom: 4px; }
+  .drop span { color: var(--ink-3); font-size: 13.5px; }
+  .drop .folder {
+    position: absolute; top: 12px; right: 12px;
+    font-size: 12.5px; color: var(--ink-2);
+    background: var(--card-2); border: 1px solid var(--line);
+    border-radius: 8px; padding: 6px 11px; cursor: pointer;
+    transition: color .12s, border-color .12s;
+  }
+  .drop .folder:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* ── settings ─────────────────────────────────────── */
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    margin-top: 16px;
+  }
+  .settings {
+    display: grid;
+    grid-template-columns: 1fr 1.2fr 1.1fr;
+    gap: 20px;
+    padding: 20px 22px;
+  }
+  .field label {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 13px; font-weight: 500;
+    color: var(--ink-2); margin-bottom: 8px;
+  }
+  .field label b { color: var(--ink); font-weight: 600; }
+  .field.dim { opacity: 0.45; pointer-events: none; }
+
+  .label-select {
+    background: transparent; border: 0; padding: 0; width: auto;
+    color: var(--ink-2); font: inherit; font-size: 13px; font-weight: 500;
+    cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
+    text-decoration-color: var(--line);
+  }
+  .label-select:hover, .label-select:focus { color: var(--accent); outline: none; }
+
+  select, input[type="text"], input[type="number"] {
+    width: 100%; background: var(--card-2); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 9px;
+    padding: 9px 11px; font: inherit; font-size: 14px;
+    transition: border-color .12s;
+  }
+  select:focus, input:focus { outline: 0; border-color: var(--accent); }
+  input::placeholder { color: var(--ink-3); }
+
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 4px; border-radius: 2px;
+    background: var(--line); outline: 0; margin: 15px 0 0;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 17px; height: 17px;
+    background: var(--accent); border-radius: 50%; cursor: grab;
+    box-shadow: 0 0 0 3px var(--card), 0 1px 3px rgba(70,55,35,.3);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 17px; height: 17px; background: var(--accent);
+    border: 0; border-radius: 50%; cursor: grab;
+  }
+
+  /* ── actions ──────────────────────────────────────── */
+  .actions {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 15px 22px; border-top: 1px solid var(--line-soft);
+  }
+  button {
+    font: inherit; font-size: 14px; font-weight: 600;
+    padding: 10px 20px; border-radius: 9px; cursor: pointer;
+    border: 1px solid transparent; background: var(--accent); color: #fff;
+    transition: opacity .12s, background .12s, border-color .12s;
+  }
+  button:hover:not(:disabled) { opacity: .88; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.ghost { background: transparent; color: var(--ink-2); border-color: var(--line); }
+  button.ghost:hover:not(:disabled) { color: var(--ink); border-color: var(--ink-3); opacity: 1; }
+  button.danger { background: var(--err); color: #fff; }
+  button.link {
+    background: none; border: 0; color: var(--ink-2); padding: 6px 2px;
+    font-size: 13.5px; font-weight: 500; text-decoration: underline;
+    text-underline-offset: 3px; text-decoration-color: var(--ink-3);
+  }
+  button.link:hover:not(:disabled) { color: var(--accent); opacity: 1; }
+  .spacer { flex: 1; }
+  .dest { font-size: 13px; color: var(--ink-3); }
+  .dest b { color: var(--ink-2); font-weight: 600; }
+
+  /* ── progress + summary ───────────────────────────── */
+  .bar { height: 3px; background: var(--line-soft); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+  .summary {
+    padding: 14px 22px; font-size: 13.5px; color: var(--ink-2);
+    border-top: 1px solid var(--line-soft); line-height: 1.6;
+  }
+  .summary b { color: var(--ink); font-weight: 600; }
+  .summary .w { color: var(--warn); }
+  .summary .e { color: var(--err); }
+
+  /* ── file list ────────────────────────────────────── */
+  .list { max-height: 440px; overflow-y: auto; }
+  .list::-webkit-scrollbar { width: 9px; }
+  .list::-webkit-scrollbar-thumb { background: var(--line); border-radius: 5px; }
+  .row {
+    display: grid; grid-template-columns: 38px 1fr auto auto auto;
+    align-items: center; gap: 13px;
+    padding: 10px 22px; border-top: 1px solid var(--line-soft);
+    font-size: 14px; transition: background .1s;
+  }
+  .row.clickable { cursor: pointer; }
+  .row.clickable:hover { background: var(--card-2); }
+  .thumb {
+    width: 38px; height: 38px; border-radius: 7px;
+    background: var(--card-2); border: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; font-size: 10px; font-weight: 600; color: var(--ink-3);
+    text-transform: uppercase; flex-shrink: 0;
+  }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .row .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .nm small {
+    display: block; color: var(--ink-3); font-size: 12px; margin-top: 2px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .row .sz { color: var(--ink-2); font-size: 13px; white-space: nowrap; }
+  .row .sz s { color: var(--ink-3); text-decoration: none; }
+  .row .tag { font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+  .row .tag.ok { color: var(--ok); }
+  .row .tag.same { color: var(--warn); }
+  .row .tag.err { color: var(--err); }
+  .row .tag.wait { color: var(--ink-3); font-weight: 500; }
+  .row-btns { display: flex; align-items: center; gap: 4px; }
+  .icon-btn {
+    background: none; border: 1px solid transparent; color: var(--ink-3);
+    width: 28px; height: 28px; padding: 0; border-radius: 6px;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 15px; line-height: 1;
+  }
+  .icon-btn:hover:not(:disabled) {
+    color: var(--ink); background: var(--bg); border-color: var(--line); opacity: 1;
+  }
+  .icon-btn.del:hover:not(:disabled) { color: var(--err); }
+
+  /* ── more options ─────────────────────────────────── */
+  details.more { margin-top: 14px; }
+  details.more > summary {
+    list-style: none; cursor: pointer; user-select: none;
+    font-size: 13.5px; color: var(--ink-2); padding: 8px 4px;
+    display: flex; align-items: center; gap: 7px;
+  }
+  details.more > summary::-webkit-details-marker { display: none; }
+  details.more > summary:hover { color: var(--ink); }
+  details.more > summary i { font-style: normal; font-size: 10px; transition: transform .15s; }
+  details.more[open] > summary i { transform: rotate(90deg); }
+  .more-body {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 16px; padding: 20px 22px; box-shadow: var(--shadow);
+    display: grid; gap: 18px;
+  }
+  .chips { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+  .chip {
+    font-size: 13px; padding: 6px 12px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--card-2);
+    color: var(--ink-3); cursor: pointer; user-select: none;
+    transition: all .12s;
+  }
+  .chip:hover { color: var(--ink-2); border-color: var(--ink-3); }
+  .chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 500; }
+  .chip-add {
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .chip-add input {
+    width: 86px; padding: 5px 8px; font-size: 12.5px; border-radius: 8px;
+  }
+  .chip-add button {
+    padding: 5px 10px; font-size: 12.5px; border-radius: 8px;
+  }
+  .check-row {
+    display: flex; align-items: center; gap: 9px;
+    font-size: 13.5px; color: var(--ink-2); cursor: pointer; user-select: none;
+  }
+  .check-row input[type="checkbox"] {
+    width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; margin: 0;
+  }
+  .note { font-size: 12.5px; color: var(--ink-3); line-height: 1.55; }
+
+  /* ── comparison modal ─────────────────────────────── */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(30, 25, 20, 0.72);
+    backdrop-filter: blur(4px); z-index: 100;
+    display: none; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 18px; width: 100%; max-width: 860px; max-height: 90vh;
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0,0,0,.35);
+  }
+  .modal-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 14px 20px; border-bottom: 1px solid var(--line-soft);
+  }
+  .modal-title { font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .modal-meta { font-size: 13px; color: var(--ink-2); margin-top: 2px; }
+  .modal-stage {
+    position: relative; flex: 1; min-height: 320px; max-height: 68vh;
+    background-color: #e8e2d5;
+    background-image:
+      linear-gradient(45deg, #dcd5c6 25%, transparent 25%),
+      linear-gradient(-45deg, #dcd5c6 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #dcd5c6 75%),
+      linear-gradient(-45deg, transparent 75%, #dcd5c6 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; user-select: none;
+  }
+  .compare-wrap {
+    position: relative; display: inline-block; max-width: 100%; max-height: 68vh;
+    line-height: 0;
+  }
+  .compare-wrap img {
+    display: block; max-width: 100%; max-height: 64vh; width: auto; height: auto;
+    object-fit: contain; pointer-events: none;
+  }
+  .compare-before {
+    position: absolute; inset: 0; overflow: hidden;
+  }
+  .compare-before img {
+    width: 100%; height: 100%; max-width: none; max-height: none;
+  }
+  .compare-handle {
+    position: absolute; top: 0; bottom: 0; width: 2px; background: #fff;
+    box-shadow: 0 0 6px rgba(0,0,0,.45); cursor: ew-resize;
+  }
+  .compare-knob {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 34px; height: 34px; border-radius: 50%;
+    background: var(--accent); color: #fff; border: 2px solid #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,.35);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600; letter-spacing: -1px;
+  }
+  .compare-badge {
+    position: absolute; top: 12px; padding: 4px 10px; border-radius: 6px;
+    background: rgba(44, 40, 35, 0.78); color: #fffdf8;
+    font-size: 12px; font-weight: 500; pointer-events: none; line-height: 1.3;
+  }
+  .compare-badge.left { left: 12px; }
+  .compare-badge.right { right: 12px; }
+  .modal-foot {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 12px 20px; border-top: 1px solid var(--line-soft); background: var(--card);
+    flex-wrap: wrap;
+  }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(14px);
+    background: var(--ink); color: var(--card);
+    padding: 11px 18px; border-radius: 10px; font-size: 13.5px;
+    opacity: 0; pointer-events: none; transition: all .2s; z-index: 150;
+    box-shadow: 0 8px 28px -8px rgba(44,40,35,.5);
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 640px) {
+    .app { padding: 24px 16px 60px; }
+    h1 { font-size: 28px; }
+    header { margin-bottom: 20px; }
+    .settings { grid-template-columns: 1fr; gap: 16px; }
+    select, input[type="text"], input[type="number"] { padding: 11px 13px; font-size: 15px; }
+    .drop { padding: 32px 16px; }
+    .drop .folder { position: static; display: inline-block; margin-top: 14px; }
+    .actions { flex-direction: column; align-items: stretch; gap: 10px; }
+    .actions button { width: 100%; padding: 12px; }
+    .actions .spacer { display: none; }
+    .actions .dest { text-align: center; margin-top: 2px; }
+    .row {
+      grid-template-columns: 36px 1fr auto;
+      gap: 6px 10px;
+      padding: 12px 16px;
+    }
+    .row .nm { grid-column: 2 / 4; }
+    .row .sz { grid-column: 2 / 3; }
+    .row .tag { grid-column: 3 / 4; justify-self: end; }
+    .row-btns { grid-column: 3 / 4; justify-self: end; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <h1>WebP <em>Forge</em></h1>
+    <p>Drop your photos. Get small WebP files back — 100% in your browser.</p>
+  </header>
+
+  <div class="drop" id="drop">
+    <div class="folder" id="folderBtn">Pick a folder</div>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 4v12m0 0l-4-4m4 4l4-4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>
+    </svg>
+    <b id="dropTitle">Tap, paste, or drop images here</b>
+    <span>JPG, PNG, GIF, BMP, SVG, WebP, AVIF, TIFF, RAW (CR2, CR3, NEF, ARW, DNG, RAF)</span>
+  </div>
+
+  <div class="panel">
+    <div class="settings">
+      <div class="field">
+        <label for="mode">Preset</label>
+        <select id="mode">
+          <option value="photo">Photo (Smallest)</option>
+          <option value="sharp">UI &amp; Graphics (Sharp edges)</option>
+          <option value="lossless">Lossless (Pixel-perfect)</option>
+        </select>
+      </div>
+      <div class="field" id="qualityField">
+        <label for="quality">Quality <b id="qval">80</b></label>
+        <input type="range" id="quality" min="30" max="100" step="1" value="80" />
+      </div>
+      <div class="field">
+        <label for="maxw">
+          <select id="resizeMode" class="label-select" title="Choose how the dimension limit applies">
+            <option value="width">Max width (px)</option>
+            <option value="long">Max long edge (px)</option>
+            <option value="height">Max height (px)</option>
+          </select>
+        </label>
+        <input type="number" id="maxw" value="0" min="0" step="10" placeholder="0 = Original size" />
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="convert" disabled>Convert</button>
+      <button id="stop" class="danger" style="display:none">Stop</button>
+      <button id="clear" class="ghost" disabled>Clear</button>
+      <span class="spacer"></span>
+      <span class="dest" id="dest"></span>
+      <button class="link" id="pickDest">Change</button>
+      <button class="link" id="resetDest" style="display:none">Use zip</button>
+    </div>
+
+    <div class="bar" id="barWrap" style="display:none"><i id="bar"></i></div>
+    <div class="summary" id="summary" style="display:none"></div>
+
+    <div class="list" id="list"></div>
+
+    <div class="actions" id="after" style="display:none">
+      <button id="download">Download zip</button>
+      <button class="ghost" id="copyHtml">Copy &lt;img&gt; HTML</button>
+      <button class="ghost" id="copyPicture">Copy &lt;picture&gt;</button>
+    </div>
+  </div>
+
+  <details class="more">
+    <summary><i>▶</i> More options</summary>
+    <div class="more-body">
+      <div class="field">
+        <label for="targetKB">Keep every file under (KB) — leave 0 to just use quality</label>
+        <input type="number" id="targetKB" value="0" min="0" step="10" placeholder="0" />
+      </div>
+      <div class="field">
+        <label>Also save smaller copies for responsive sites</label>
+        <div class="chips" id="chips"></div>
+        <div class="note">Sizes bigger than your photo are skipped, so nothing gets blurry.</div>
+      </div>
+      <div class="field">
+        <label for="keyword">Rename files with a keyword</label>
+        <input type="text" id="keyword" placeholder="e.g. running-shoes → running-shoes-1.webp" />
+      </div>
+      <div class="field">
+        <label for="urlPrefix">Image folder path (used in the copied HTML)</label>
+        <input type="text" id="urlPrefix" value="/images/" />
+      </div>
+      <label class="check-row">
+        <input type="checkbox" id="skipLarger" checked />
+        <span>Keep original file if converting to WebP would make it larger</span>
+      </label>
+      <div class="note" id="engine"></div>
+    </div>
+  </details>
+
+</div>
+
+<!-- Before / After Comparison Modal -->
+<div class="modal-backdrop" id="modalBackdrop" role="dialog" aria-modal="true">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="modalTitle">Preview</div>
+        <div class="modal-meta" id="modalMeta"></div>
+      </div>
+      <button class="ghost" id="modalClose" style="padding:7px 14px">Close</button>
+    </div>
+    <div class="modal-stage" id="modalStage">
+      <div class="compare-wrap" id="compareWrap">
+        <img id="imgAfter" alt="Converted WebP" />
+        <div class="compare-before" id="compareBefore">
+          <img id="imgBefore" alt="Original image" />
+        </div>
+        <div class="compare-handle" id="compareHandle" style="left:50%">
+          <div class="compare-knob">↔</div>
+        </div>
+        <div class="compare-badge left" id="badgeBefore">Original</div>
+        <div class="compare-badge right" id="badgeAfter">WebP</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div class="note">Drag the slider to compare · Use ← / → keys to switch images</div>
+      <button id="modalDownload">Download file</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="files" multiple accept="image/*,.svg,.cr2,.cr3,.nef,.arw,.dng,.raf" hidden />
+<input type="file" id="folder" webkitdirectory directory multiple hidden />
+<div class="toast" id="toast"></div>
+
+<script src="jszip.min.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

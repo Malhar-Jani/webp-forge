@@ -1,0 +1,33 @@
+{
+  "name": "webp-forge",
+  "version": "2.0.0",
+  "description": "Fast, private, multi-core WebP image and camera RAW converter running 100% in your browser via WebAssembly.",
+  "homepage": "https://malhar-jani.github.io/webp-forge/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Malhar-Jani/webp-forge.git"
+  },
+  "keywords": [
+    "webp",
+    "image-compression",
+    "webassembly",
+    "libwebp",
+    "libraw",
+    "raw-converter",
+    "responsive-images"
+  ],
+  "author": "Malhar Jani",
+  "type": "module",
+  "license": "ISC",
+  "scripts": {
+    "start": "node server.mjs",
+    "serve": "node server.mjs --no-open",
+    "vendor": "node scripts/vendor.mjs"
+  },
+  "devDependencies": {
+    "@jsquash/webp": "^1.5.0"
+  },
+  "dependencies": {
+    "rawconvert-wasm": "^0.1.1"
+  }
+}
